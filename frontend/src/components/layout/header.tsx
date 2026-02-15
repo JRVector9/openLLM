@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { LogOut, Menu } from "lucide-react";
 
@@ -13,10 +12,10 @@ interface HeaderProps {
 
 export function Header({ displayName, email, onMenuToggle }: HeaderProps) {
   const router = useRouter();
-  const supabase = createClient();
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
+  const handleLogout = () => {
+    document.cookie = "demo_user=; path=/; max-age=0";
+    document.cookie = "demo_name=; path=/; max-age=0";
     router.push("/auth/login");
     router.refresh();
   };
@@ -36,7 +35,7 @@ export function Header({ displayName, email, onMenuToggle }: HeaderProps) {
       </div>
       <div className="flex items-center gap-3">
         <span className="hidden text-sm text-muted-foreground sm:inline">
-          {displayName || email}
+          {displayName || email || "User"}
         </span>
         <Button variant="ghost" size="sm" onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />

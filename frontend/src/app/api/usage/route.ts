@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { newApiClient } from "@/lib/newapi/client";
 
 interface LogEntry {
@@ -12,25 +11,18 @@ interface LogEntry {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
+    const demoUser = request.cookies.get("demo_user")?.value;
+    if (!demoUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { searchParams } = request.nextUrl;
     const period = searchParams.get("period") || "week"; // day, week, month
 
-    // Get user's API key token IDs
-    const { data: keys } = await supabase
-      .from("user_api_keys")
-      .select("new_api_token_id, key_name")
-      .eq("user_id", user.id);
+    // Get all tokens from New API
+    const tokens = await newApiClient.listTokens();
 
-    if (!keys || keys.length === 0) {
+    if (!tokens || tokens.length === 0) {
       return NextResponse.json({ usage: [], dailyUsage: [] });
     }
 
@@ -52,10 +44,10 @@ export async function GET(request: NextRequest) {
 
     // Fetch logs for each key
     const allLogs: LogEntry[] = [];
-    for (const key of keys) {
+    for (const token of tokens) {
       try {
         const logs = (await newApiClient.getUsageLogs(
-          key.new_api_token_id,
+          token.id,
           startTime
         )) as LogEntry[];
         allLogs.push(...logs);

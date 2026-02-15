@@ -1,36 +1,23 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function GET() {
-  try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+export async function GET(request: NextRequest) {
+  // Supabase auth disabled - return demo profile from cookie
+  const demoUser = request.cookies.get("demo_user")?.value;
+  const demoName = request.cookies.get("demo_name")?.value;
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { data: profile, error } = await supabase
-      .from("user_profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    if (error || !profile) {
-      return NextResponse.json(
-        { error: "프로필을 찾을 수 없습니다." },
-        { status: 404 }
-      );
-    }
-
-    return NextResponse.json({ profile });
-  } catch (error) {
-    console.error("Profile fetch error:", error);
-    return NextResponse.json(
-      { error: "프로필 조회 중 오류가 발생했습니다." },
-      { status: 500 }
-    );
+  if (!demoUser) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  return NextResponse.json({
+    profile: {
+      id: "demo-user",
+      email: decodeURIComponent(demoUser),
+      display_name: demoName ? decodeURIComponent(demoName) : null,
+      max_keys: 3,
+      used_quota: 0,
+      total_quota: 500000,
+      created_at: new Date().toISOString(),
+    },
+  });
 }

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +22,6 @@ export function SignupForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,26 +40,10 @@ export function SignupForm() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            display_name: displayName || email.split("@")[0],
-          },
-        },
-      });
-
-      if (error) {
-        if (error.message.includes("already registered")) {
-          setError("이미 등록된 이메일입니다.");
-        } else {
-          setError(error.message);
-        }
-        return;
-      }
-
-      // Auto-login after signup (no email verification required per spec)
+      // Supabase auth disabled - direct dashboard access
+      const name = displayName || email.split("@")[0];
+      document.cookie = `demo_user=${encodeURIComponent(email)}; path=/; max-age=86400`;
+      document.cookie = `demo_name=${encodeURIComponent(name)}; path=/; max-age=86400`;
       router.push("/dashboard");
       router.refresh();
     } catch {

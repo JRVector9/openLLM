@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +20,6 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const supabase = createClient();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,20 +27,8 @@ export function LoginForm() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        setError(
-          error.message === "Invalid login credentials"
-            ? "이메일 또는 비밀번호가 올바르지 않습니다."
-            : error.message
-        );
-        return;
-      }
-
+      // Supabase auth disabled - direct dashboard access
+      document.cookie = `demo_user=${encodeURIComponent(email)}; path=/; max-age=86400`;
       router.push("/dashboard");
       router.refresh();
     } catch {

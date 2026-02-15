@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { newApiClient } from "@/lib/newapi/client";
+
+// In-memory store for demo (no Supabase)
+const ollamaServers: Array<{
+  id: string;
+  server_name: string;
+  server_url: string;
+  models: string[];
+  new_api_channel_id: number | null;
+  created_at: string;
+}> = [];
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
+    const demoUser = request.cookies.get("demo_user")?.value;
+    if (!demoUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -63,7 +68,7 @@ export async function POST(request: NextRequest) {
     let channelId: number | null = null;
     try {
       const channel = await newApiClient.createChannel({
-        name: `ollama_${user.id.slice(0, 8)}_${server_name}`,
+        name: `ollama_demo_${server_name}`,
         type: 2,
         key: "ollama",
         base_url: server_url,
@@ -75,26 +80,16 @@ export async function POST(request: NextRequest) {
       // Channel creation is optional
     }
 
-    // Save to Supabase
-    const { data: server, error: dbError } = await supabase
-      .from("user_ollama_servers")
-      .insert({
-        user_id: user.id,
-        server_name: server_name.trim(),
-        server_url: server_url.trim(),
-        models,
-        new_api_channel_id: channelId,
-        last_health_check: new Date().toISOString(),
-      })
-      .select()
-      .single();
+    const server = {
+      id: crypto.randomUUID(),
+      server_name: server_name.trim(),
+      server_url: server_url.trim(),
+      models,
+      new_api_channel_id: channelId,
+      created_at: new Date().toISOString(),
+    };
 
-    if (dbError) {
-      return NextResponse.json(
-        { error: "서버 등록에 실패했습니다." },
-        { status: 500 }
-      );
-    }
+    ollamaServers.push(server);
 
     return NextResponse.json({ server, models });
   } catch (error) {
@@ -106,24 +101,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
+    const demoUser = request.cookies.get("demo_user")?.value;
+    if (!demoUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: servers } = await supabase
-      .from("user_ollama_servers")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-
-    return NextResponse.json({ servers: servers || [] });
+    return NextResponse.json({ servers: ollamaServers });
   } catch (error) {
     console.error("Ollama list error:", error);
     return NextResponse.json(
@@ -135,12 +120,8 @@ export async function GET() {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
+    const demoUser = request.cookies.get("demo_user")?.value;
+    if (!demoUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -154,17 +135,9 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const { error } = await supabase
-      .from("user_ollama_servers")
-      .delete()
-      .eq("id", serverId)
-      .eq("user_id", user.id);
-
-    if (error) {
-      return NextResponse.json(
-        { error: "서버 삭제에 실패했습니다." },
-        { status: 500 }
-      );
+    const idx = ollamaServers.findIndex((s) => s.id === serverId);
+    if (idx !== -1) {
+      ollamaServers.splice(idx, 1);
     }
 
     return NextResponse.json({ success: true });
