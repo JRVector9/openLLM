@@ -1,5 +1,7 @@
-const NEW_API_BASE_URL = process.env.NEW_API_BASE_URL || "http://localhost:3000";
-const NEW_API_ADMIN_TOKEN = process.env.NEW_API_ADMIN_TOKEN || "";
+const NEW_API_BASE_URL =
+  process.env.NEW_API_BASE_URL || "http://localhost:3000";
+const NEW_API_ADMIN_USER = process.env.NEW_API_ADMIN_USER || "JR";
+const NEW_API_ADMIN_PASS = process.env.NEW_API_ADMIN_PASS || "abcd1234";
 
 interface NewApiResponse<T = unknown> {
   success: boolean;
@@ -25,14 +27,59 @@ interface CreateTokenParams {
   unlimited_quota?: boolean;
 }
 
+interface LoginResponse {
+  id: number;
+  username: string;
+  role: number;
+}
+
+// Session management
+let sessionCookie: string | null = null;
+let adminUserId: number | null = null;
+
+async function login(): Promise<void> {
+  const res = await fetch(`${NEW_API_BASE_URL}/api/user/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username: NEW_API_ADMIN_USER,
+      password: NEW_API_ADMIN_PASS,
+    }),
+  });
+
+  const setCookie = res.headers.get("set-cookie");
+  if (setCookie) {
+    const match = setCookie.match(/session=([^;]+)/);
+    if (match) {
+      sessionCookie = match[1];
+    }
+  }
+
+  const body: NewApiResponse<LoginResponse> = await res.json();
+  if (!body.success || !body.data) {
+    throw new Error(`New API login failed: ${body.message}`);
+  }
+  adminUserId = body.data.id;
+}
+
+async function ensureSession(): Promise<void> {
+  if (!sessionCookie || !adminUserId) {
+    await login();
+  }
+}
+
 async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retry = true
 ): Promise<NewApiResponse<T>> {
+  await ensureSession();
+
   const url = `${NEW_API_BASE_URL}${endpoint}`;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${NEW_API_ADMIN_TOKEN}`,
+    Cookie: `session=${sessionCookie}`,
+    "New-Api-User": String(adminUserId),
     ...((options.headers as Record<string, string>) || {}),
   };
 
@@ -43,10 +90,29 @@ async function apiRequest<T>(
 
   if (!res.ok) {
     const text = await res.text();
+    // If unauthorized, retry with fresh login
+    if (res.status === 401 && retry) {
+      sessionCookie = null;
+      adminUserId = null;
+      return apiRequest<T>(endpoint, options, false);
+    }
     throw new Error(`New API error (${res.status}): ${text}`);
   }
 
-  return res.json();
+  const body: NewApiResponse<T> = await res.json();
+
+  // Check for auth error in response body
+  if (
+    !body.success &&
+    body.message?.includes("未登录") &&
+    retry
+  ) {
+    sessionCookie = null;
+    adminUserId = null;
+    return apiRequest<T>(endpoint, options, false);
+  }
+
+  return body;
 }
 
 export const newApiClient = {
@@ -56,7 +122,7 @@ export const newApiClient = {
       method: "POST",
       body: JSON.stringify({
         name: params.name,
-        remain_quota: params.remain_quota ?? 500000, // 5000 tokens = 500000 quota (100x)
+        remain_quota: params.remain_quota ?? 500000,
         expired_time: params.expired_time ?? -1,
         unlimited_quota: params.unlimited_quota ?? false,
       }),
@@ -67,8 +133,11 @@ export const newApiClient = {
 
   // List tokens
   async listTokens(): Promise<NewApiToken[]> {
-    const res = await apiRequest<NewApiToken[]>("/api/token/?p=0&size=100");
-    return res.data || [];
+    const res = await apiRequest<{ items: NewApiToken[]; total: number }>(
+      "/api/token/?p=0&size=100"
+    );
+    if (!res.success) throw new Error(res.message || "Failed to list tokens");
+    return res.data?.items || [];
   },
 
   // Delete a token
@@ -129,7 +198,7 @@ export const newApiClient = {
   },
 
   // Test channel connectivity
-  async testChannel(channelId: number, model: string): Promise<boolean> {
+  async testChannel(channelId: number): Promise<boolean> {
     try {
       const res = await apiRequest<{ success: boolean }>(
         `/api/channel/test/${channelId}`,
