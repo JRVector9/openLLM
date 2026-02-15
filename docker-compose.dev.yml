@@ -1,0 +1,46 @@
+version: "3.8"
+
+services:
+  new-api:
+    image: calciumion/new-api:latest
+    container_name: openllm-new-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - SQL_DSN=postgres://openllm:openllm@db:5432/openllm?sslmode=disable
+      - REDIS_CONN_STRING=redis://redis:6379
+      - SESSION_SECRET=dev-session-secret-change-in-production
+      - TZ=Asia/Seoul
+    volumes:
+      - new-api-data:/data
+    depends_on:
+      - db
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: openllm-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  db:
+    image: postgres:16-alpine
+    container_name: openllm-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: openllm
+      POSTGRES_PASSWORD: openllm
+      POSTGRES_DB: openllm
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  new-api-data:
+  redis-data:
+  postgres-data:
