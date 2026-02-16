@@ -125,6 +125,7 @@ export const newApiClient = {
         remain_quota: params.remain_quota ?? 500000,
         expired_time: params.expired_time ?? -1,
         unlimited_quota: params.unlimited_quota ?? false,
+        status: 1,
       }),
     });
     if (!res.success) throw new Error(res.message || "Failed to create token");

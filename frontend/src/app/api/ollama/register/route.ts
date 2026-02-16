@@ -82,10 +82,13 @@ export async function POST(request: NextRequest) {
 
     const server = {
       id: crypto.randomUUID(),
+      user_id: "demo-user",
       server_name: server_name.trim(),
       server_url: server_url.trim(),
+      is_active: true,
       models,
       new_api_channel_id: channelId,
+      last_health_check: new Date().toISOString(),
       created_at: new Date().toISOString(),
     };
 
